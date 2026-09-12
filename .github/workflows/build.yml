@@ -2,112 +2,40 @@ name: Build APK
 
 on:
   push:
-    branches: [ main, develop, master ]
-  pull_request:
-    branches: [ main, master ]
+    branches: [ main ]
   workflow_dispatch:
-    inputs:
-      llama_tag:
-        description: 'llama.cpp git tag (e.g. b4600)'
-        required: false
-        default: 'b4600'
-
-env:
-  NDK_VERSION:   "26.3.11579264"
-  CMAKE_VERSION: "3.22.1"
 
 jobs:
   build:
-    name: Build Debug APK (arm64-v8a)
     runs-on: ubuntu-latest
-
     steps:
-      # ── Checkout ─────────────────────────────────────────────────────────────
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
-      # ── Java 17 ──────────────────────────────────────────────────────────────
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: gradle
 
-      # ── Android SDK / NDK / CMake ────────────────────────────────────────────
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Install NDK ${{ env.NDK_VERSION }} and CMake ${{ env.CMAKE_VERSION }}
+      - name: Install NDK and CMake
         run: |
-          sdkmanager --install \
-            "ndk;${{ env.NDK_VERSION }}" \
-            "cmake;${{ env.CMAKE_VERSION }}"
-          echo "ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk/${{ env.NDK_VERSION }}" >> $GITHUB_ENV
-          echo "NDK_HOME=$ANDROID_SDK_ROOT/ndk/${{ env.NDK_VERSION }}"         >> $GITHUB_ENV
+          sdkmanager --install "ndk;26.3.11579264" "cmake;3.22.1" "build-tools;34.0.0" "platforms;android-34"
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/26.3.11579264" >> $GITHUB_ENV
 
-      # ── Gradle wrapper permissions ────────────────────────────────────────────
-      - name: Grant gradlew execute permission
+      - name: Grant execute permission
         run: chmod +x gradlew
 
-      # ── Cache: Gradle + llama.cpp FetchContent ────────────────────────────────
-      - name: Cache Gradle
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle.kts', 'gradle/libs.versions.toml') }}
-          restore-keys: |
-            ${{ runner.os }}-gradle-
+      - name: Build Debug APK arm64-v8a
+        run: ./gradlew :app:assembleDebug --no-daemon --stacktrace
 
-      - name: Cache llama.cpp FetchContent (CMake build dir)
-        uses: actions/cache@v4
-        with:
-          path: |
-            app/.cxx
-            app/build/intermediates/cmake
-          key: ${{ runner.os }}-cmake-${{ hashFiles('app/src/main/cpp/CMakeLists.txt') }}-${{ inputs.llama_tag || 'b4600' }}
-          restore-keys: |
-            ${{ runner.os }}-cmake-
-
-      # ── Build ──────────────────────────────────────────────────────────────────
-      - name: Build Debug APK
-        run: |
-          ./gradlew assembleDebug \
-            --no-daemon \
-            --stacktrace \
-            --info \
-            -PLLAMA_TAG="${{ inputs.llama_tag || 'b4600' }}"
-
-      # ── Verify .so was produced ───────────────────────────────────────────────
-      - name: Verify native library in APK
-        run: |
-          APK=$(find app/build/outputs/apk/debug -name "*.apk" | head -1)
-          echo "APK: $APK  ($(du -sh "$APK" | cut -f1))"
-          unzip -l "$APK" | grep "\.so" || true
-          if ! unzip -l "$APK" | grep -q "libkayan_llama.so"; then
-            echo "❌ libkayan_llama.so NOT found in APK!"
-            exit 1
-          fi
-          echo "✓ libkayan_llama.so present"
-
-      # ── Upload APK ────────────────────────────────────────────────────────────
-      - name: Upload Debug APK
+      - name: Upload APK
+        if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: kayan-debug-${{ github.sha }}
+          name: app-debug-arm64
           path: app/build/outputs/apk/debug/*.apk
-          retention-days: 14
-          if-no-files-found: error
-
-      # ── Upload build logs on failure ──────────────────────────────────────────
-      - name: Upload build logs (on failure)
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-logs-${{ github.sha }}
-          path: |
-            app/build/reports
-            app/.cxx/**/build_output.txt
-          retention-days: 7
