@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+        enableEdgeToEdge() requires AppCompat or Material3 theme.
+        android:Theme.Material.Light.NoActionBar is Material 1 and
+        causes a WindowInsetsController crash on some devices.
+    -->
+    <style name="Theme.KayanX" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
+</resources>

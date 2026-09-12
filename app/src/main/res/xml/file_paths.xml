@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- Internal cache (used for model copies when direct path extraction fails) -->
+    <cache-path name="model_cache" path="models/" />
+    <!-- Files dir for any other internal outputs -->
+    <files-path name="internal_files" path="." />
+</paths>
